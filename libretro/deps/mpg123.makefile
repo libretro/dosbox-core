@@ -11,7 +11,8 @@ $(LIBMPG123):
 	&& unset CFLAGS \
 	&& unset CXXFLAGS \
 	&& unset LDFLAGS \
-	&& "$(CURDIR)/deps/mpg123/configure" \
+	&& CFLAGS="-g -O2 -Wno-error=incompatible-pointer-types" \
+	   "$(CURDIR)/deps/mpg123/configure" \
 	    --host=$(TARGET_TRIPLET) \
 	    --prefix="$(DEPS_BIN_DIR)" \
 	    --disable-shared \

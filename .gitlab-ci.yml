@@ -58,6 +58,19 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/tvos-arm64.yml'
 
+  ################################## CONSOLES ################################
+  # Nintendo GameCube
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ngc-static.yml'
+
+  # Nintendo Wii
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/wii-static.yml'
+
+  # Nintendo WiiU
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/wiiu-static.yml'
+
   #################################### MISC ##################################
   # webOS 32-bit (LGTV)
   - project: 'libretro-infrastructure/ci-templates'
@@ -327,6 +340,50 @@ libretro-build-osx-arm64:
     - export LDFLAGS="-L \"$PWD/libretro/deps_bin/lib\" -undefined error"
     - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
     - strip -u -r -S ${MAKEFILE_PATH}/${CORENAME}_libretro.dylib
+
+################################### CONSOLES #################################
+# Static builds: the frontend links the core into RetroArch rather than loading
+# it, so these produce an archive. The platform branch in the makefile turns off
+# what these platforms cannot have - the dynarec, which has no PowerPC backend
+# here, and BASSMIDI, which loads its library through dlopen - and switches to
+# the fake SDL, which is what takes the audio-codec dependencies out of the
+# build and leaves munt as the only one to cross compile.
+
+# Nintendo GameCube
+libretro-build-ngc:
+  extends:
+    - .libretro-ngc-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: ngc
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/GameCube.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo Wii
+libretro-build-wii:
+  extends:
+    - .libretro-wii-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: wii
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Wii.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo WiiU
+libretro-build-wiiu:
+  extends:
+    - .libretro-wiiu-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: wiiu
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/WiiU.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
 
 #################################### MISC ####################################
 # webOS 32-bit (LGTV)

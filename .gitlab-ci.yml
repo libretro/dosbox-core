@@ -71,6 +71,10 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/wiiu-static.yml'
 
+  # Nintendo Switch
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/libnx-static.yml'
+
   #################################### MISC ##################################
   # webOS 32-bit (LGTV)
   - project: 'libretro-infrastructure/ci-templates'
@@ -381,6 +385,18 @@ libretro-build-wiiu:
   variables:
     platform: wiiu
     EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/WiiU.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo Switch
+libretro-build-libnx-aarch64:
+  extends:
+    - .libretro-libnx-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: libnx
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake
   script:
     - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
     - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}

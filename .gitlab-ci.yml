@@ -41,6 +41,10 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/osx-x64.yml'
 
+  # MacOS ARM 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/osx-arm64.yml'
+
   #################################### MISC ##################################
   # webOS 32-bit (LGTV)
   - project: 'libretro-infrastructure/ci-templates'
@@ -169,6 +173,12 @@ libretro-build-linux-aarch64:
   extends:
     - .libretro-linux-aarch64-make-default
     - .core-defs
+  # This job installs its autotools from the distribution archive, so it fails
+  # whenever that archive is unreachable rather than for anything to do with
+  # the core. A nightly build should survive that.
+  retry:
+    max: 2
+    when: script_failure
   variables:
     platform: unix
     BUNDLED_AUDIO_CODECS: 1
@@ -243,6 +253,9 @@ libretro-build-osx-x64:
     platform: osx
     WITH_DYNAREC: x86_64
     STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
     BUNDLED_AUDIO_CODECS: 1
     BUNDLED_LIBSNDFILE: 1
     BUNDLED_SDL: 1
@@ -270,12 +283,49 @@ libretro-build-osx-x64:
     - strip -u -r -S ${MAKEFILE_PATH}/${CORENAME}_libretro.dylib
     - rm -rf "${HOMEBREW_PREFIX}"
 
+# MacOS ARM 64-bit
+# Unlike the x64 job there is no prebuilt dependency tree to fetch: the tarball
+# that one downloads was built for x86_64 and has no arm64 counterpart. So this
+# leans on the runner's own Homebrew, which on an arm64 machine lives in
+# /opt/homebrew, and on the bundled copies of SDL, libsndfile and the audio
+# codecs that the Makefile can build itself. Whether that is enough is what the
+# buildbot has to answer.
+libretro-build-osx-arm64:
+  extends:
+    - .libretro-osx-arm64-make-default
+    - .core-defs
+  variables:
+    platform: osx
+    WITH_DYNAREC: arm64
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    PKG_CONFIG_FLAGS: --static
+    MACOSX_DEPLOYMENT_TARGET: '11.0'
+    HOMEBREW_PREFIX: /opt/homebrew
+  script:
+    - export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:$PATH"
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - export LDFLAGS="-L \"$PWD/libretro/deps_bin/lib\" -undefined error"
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - strip -u -r -S ${MAKEFILE_PATH}/${CORENAME}_libretro.dylib
+
 #################################### MISC ####################################
 # webOS 32-bit (LGTV)
 libretro-build-webos-armv7a:
   extends:
     - .libretro-webos-armv7a-make-default
     - .core-defs
+  # Same as the aarch64 job: the packages come from the distribution archive at
+  # build time, and an archive that cannot be reached is not a broken core.
+  retry:
+    max: 2
+    when: script_failure
   variables:
     platform: unix
     TARGET_TRIPLET: arm-webos-linux-gnueabi

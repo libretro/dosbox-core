@@ -205,6 +205,11 @@ else ifeq ($(platform),psp1)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	COMMONFLAGS += -DPSP -D__PSP__ -G0 -march=allegrex -mno-abicalls -fno-pic
 	COMMONFLAGS += -I$(PSPDEV)/psp/include -I$(PSPDEV)/psp/sdk/include
+	# Without this munt is configured with the host compiler and the resulting
+	# libmt32emu.a is x86, which only shows up at link time in the frontend.
+	EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(PSPDEV)/psp/share/pspdev.cmake
+	# allegrex has no PIC, and the deps default to asking for it.
+	EXTRA_CMAKE_FLAGS += -DCMAKE_POSITION_INDEPENDENT_CODE=OFF
 else ifeq ($(platform),vita)
 	WITH_FAKE_SDL := 1
 	STATIC_LINKING := 1
@@ -218,6 +223,8 @@ else ifeq ($(platform),vita)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	COMMONFLAGS += -DVITA -D__vita__ -mtune=cortex-a9 -mfpu=neon -mfloat-abi=hard
 	COMMONFLAGS += -I$(VITASDK)/arm-vita-eabi/include
+	# Same reason as the PSP branch: munt has to be built for the target.
+	EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(VITASDK)/share/vita.toolchain.cmake
 else ifeq ($(platform), osx)
 	COMMONFLAGS += -DC_HAVE_MPROTECT
 	TARGET := $(TARGET_NAME)_libretro.dylib

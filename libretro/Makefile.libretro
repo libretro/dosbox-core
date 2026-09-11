@@ -189,6 +189,35 @@ else ifneq (,$(filter $(platform),ngc wii wiiu))
 	else
 		COMMONFLAGS += -DWIIU -D__wiiu__ -mcpu=750 -mregnames
 	endif
+else ifeq ($(platform),psp1)
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	# The PSP has no 3D pipeline this core could drive and only 32MB of RAM, so
+	# Voodoo emulation is off rather than merely unused.
+	WITH_VOODOO := 0
+	CC  := $(PSPDEV)/bin/psp-gcc
+	CXX := $(PSPDEV)/bin/psp-g++
+	AR  := $(PSPDEV)/bin/psp-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	COMMONFLAGS += -DPSP -D__PSP__ -G0 -march=allegrex -mno-abicalls -fno-pic
+	COMMONFLAGS += -I$(PSPDEV)/psp/include -I$(PSPDEV)/psp/sdk/include
+else ifeq ($(platform),vita)
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	CC  := $(VITASDK)/bin/arm-vita-eabi-gcc
+	CXX := $(VITASDK)/bin/arm-vita-eabi-g++
+	AR  := $(VITASDK)/bin/arm-vita-eabi-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	COMMONFLAGS += -DVITA -D__vita__ -mtune=cortex-a9 -mfpu=neon -mfloat-abi=hard
+	COMMONFLAGS += -I$(VITASDK)/arm-vita-eabi/include
 else ifeq ($(platform), osx)
 	COMMONFLAGS += -DC_HAVE_MPROTECT
 	TARGET := $(TARGET_NAME)_libretro.dylib

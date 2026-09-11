@@ -141,7 +141,20 @@ endif
 # step here. None has a dynarec backend in this core, and none of them wants
 # SDL - the fake one is enough, which also takes the audio-codec dependencies
 # out of the build and leaves munt as the only one left to cross build.
-ifeq ($(platform),libnx)
+ifeq ($(platform),ctr)
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	CC  := $(DEVKITARM)/bin/arm-none-eabi-gcc
+	CXX := $(DEVKITARM)/bin/arm-none-eabi-g++
+	AR  := $(DEVKITARM)/bin/arm-none-eabi-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	COMMONFLAGS += -D_3DS -DARM11 -march=armv6k -mtune=mpcore -mfloat-abi=hard -mword-relocations
+	COMMONFLAGS += -I$(DEVKITPRO)/libctru/include -I$(DEVKITPRO)/portlibs/3ds/include
+else ifeq ($(platform),libnx)
 	WITH_FAKE_SDL := 1
 	STATIC_LINKING := 1
 	WITH_DYNAREC :=

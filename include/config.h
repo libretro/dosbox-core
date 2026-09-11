@@ -72,7 +72,9 @@
 #endif
 
 // ----- STANDARD LIBRARY FEATURES
-#if !defined (__QNX__)
+/* vitasdk's dirent carries only d_name, so d_type and the DT_* constants do not
+   exist there. cross.cpp already has the stat() path this selects between. */
+#if !defined (__QNX__) && !defined (__vita__)
 #define DIRENT_HAS_D_TYPE 1 /* struct dirent has d_type */
 #endif
 /* #undef DB_HAVE_NO_POWF */ /* libm doesn't include powf */

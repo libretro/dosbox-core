@@ -41,6 +41,52 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/osx-x64.yml'
 
+  # MacOS ARM 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/osx-arm64.yml'
+
+  ################################## CELLULAR ################################
+  # iOS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios-arm64.yml'
+
+  # iOS (armv7)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios9.yml'
+
+  # tvOS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/tvos-arm64.yml'
+
+  ################################## CONSOLES ################################
+  # Nintendo GameCube
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ngc-static.yml'
+
+  # Nintendo Wii
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/wii-static.yml'
+
+  # Nintendo WiiU
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/wiiu-static.yml'
+
+  # Nintendo Switch
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/libnx-static.yml'
+
+  # Nintendo 3DS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ctr-static.yml'
+
+  # PlayStation Vita
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/vita-static.yml'
+
+  # PlayStation Portable
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/psp-static.yml'
+
   #################################### MISC ##################################
   # webOS 32-bit (LGTV)
   - project: 'libretro-infrastructure/ci-templates'
@@ -169,6 +215,12 @@ libretro-build-linux-aarch64:
   extends:
     - .libretro-linux-aarch64-make-default
     - .core-defs
+  # This job installs its autotools from the distribution archive, so it fails
+  # whenever that archive is unreachable rather than for anything to do with
+  # the core. A nightly build should survive that.
+  retry:
+    max: 2
+    when: script_failure
   variables:
     platform: unix
     BUNDLED_AUDIO_CODECS: 1
@@ -243,6 +295,9 @@ libretro-build-osx-x64:
     platform: osx
     WITH_DYNAREC: x86_64
     STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
     BUNDLED_AUDIO_CODECS: 1
     BUNDLED_LIBSNDFILE: 1
     BUNDLED_SDL: 1
@@ -270,12 +325,139 @@ libretro-build-osx-x64:
     - strip -u -r -S ${MAKEFILE_PATH}/${CORENAME}_libretro.dylib
     - rm -rf "${HOMEBREW_PREFIX}"
 
+# MacOS ARM 64-bit
+# Unlike the x64 job there is no prebuilt dependency tree to fetch: the tarball
+# that one downloads was built for x86_64 and has no arm64 counterpart. So this
+# leans on the runner's own Homebrew, which on an arm64 machine lives in
+# /opt/homebrew, and on the bundled copies of SDL, libsndfile and the audio
+# codecs that the Makefile can build itself. Whether that is enough is what the
+# buildbot has to answer.
+libretro-build-osx-arm64:
+  extends:
+    - .libretro-osx-arm64-make-default
+    - .core-defs
+  variables:
+    platform: osx
+    WITH_DYNAREC: arm64
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    PKG_CONFIG_FLAGS: --static
+    MACOSX_DEPLOYMENT_TARGET: '11.0'
+    HOMEBREW_PREFIX: /opt/homebrew
+  script:
+    - export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:$PATH"
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps
+    - export LDFLAGS="-L \"$PWD/libretro/deps_bin/lib\" -undefined error"
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC}
+    - strip -u -r -S ${MAKEFILE_PATH}/${CORENAME}_libretro.dylib
+
+################################### CONSOLES #################################
+# Static builds: the frontend links the core into RetroArch rather than loading
+# it, so these produce an archive. The platform branch in the makefile turns off
+# what these platforms cannot have - the dynarec, which has no PowerPC backend
+# here, and BASSMIDI, which loads its library through dlopen - and switches to
+# the fake SDL, which is what takes the audio-codec dependencies out of the
+# build and leaves munt as the only one to cross compile.
+
+# Nintendo GameCube
+libretro-build-ngc:
+  extends:
+    - .libretro-ngc-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: ngc
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/GameCube.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo Wii
+libretro-build-wii:
+  extends:
+    - .libretro-wii-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: wii
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Wii.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo WiiU
+libretro-build-wiiu:
+  extends:
+    - .libretro-wiiu-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: wiiu
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/WiiU.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo Switch
+libretro-build-libnx-aarch64:
+  extends:
+    - .libretro-libnx-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: libnx
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo 3DS
+libretro-build-ctr:
+  extends:
+    - .libretro-ctr-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: ctr
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/3DS.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# PlayStation Vita
+libretro-build-vita:
+  extends:
+    - .libretro-vita-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: vita
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# PlayStation Portable
+libretro-build-psp:
+  extends:
+    - .libretro-psp-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: psp1
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
 #################################### MISC ####################################
 # webOS 32-bit (LGTV)
 libretro-build-webos-armv7a:
   extends:
     - .libretro-webos-armv7a-make-default
     - .core-defs
+  # Same as the aarch64 job: the packages come from the distribution archive at
+  # build time, and an archive that cannot be reached is not a broken core.
+  retry:
+    max: 2
+    when: script_failure
   variables:
     platform: unix
     TARGET_TRIPLET: arm-webos-linux-gnueabi
@@ -336,6 +518,47 @@ libretro-build-webos-armv7a:
     - LDFLAGS="-Wl,--no-undefined" make -C ${MAKEFILE_PATH} -f ${MAKEFILE} CMAKE=/usr/bin/cmake PKGCONFIG=/usr/bin/pkg-config -j${NUMPROC}
 
 ################################### CELLULAR #################################
+# iOS / tvOS
+# The default template scripts only run make, and this core has to build its
+# dependency tree first, so these carry their own. No dynarec: both platforms
+# refuse an executable writable mapping, so the Makefile leaves WITH_DYNAREC
+# empty for them and the core runs interpreted, as dosbox-pure does.
+.dosbox-core-apple-mobile:
+  variables:
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    PKG_CONFIG_FLAGS: --static
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - export LDFLAGS="-L \"$PWD/libretro/deps_bin/lib\""
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+libretro-build-ios-arm64:
+  extends:
+    - .libretro-ios-arm64-make-default
+    - .core-defs
+    - .dosbox-core-apple-mobile
+
+# iOS (armv7) [iOS 9 and up]
+libretro-build-ios9:
+  extends:
+    - .libretro-ios9-make-default
+    - .core-defs
+    - .dosbox-core-apple-mobile
+
+# tvOS
+libretro-build-tvos-arm64:
+  extends:
+    - .libretro-tvos-arm64-make-default
+    - .core-defs
+    - .dosbox-core-apple-mobile
+
 # Android ARMv7a
 android-armeabi-v7a:
   extends:

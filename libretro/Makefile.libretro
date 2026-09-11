@@ -44,12 +44,14 @@ ifeq ($(NUMPROC),)
 	NUMPROC=2
 endif
 
+# Appended, never assigned: the console jobs pass their toolchain file in
+# EXTRA_CMAKE_FLAGS, and := would throw it away before any dep is configured.
 ifeq ($(WITH_CPP20), 1)
 	CXXFLAGS += -std=gnu++20
-	EXTRA_CMAKE_FLAGS := -DCMAKE_CXX_STANDARD=20
+	EXTRA_CMAKE_FLAGS += -DCMAKE_CXX_STANDARD=20
 else
 	CXXFLAGS += -std=gnu++17
-	EXTRA_CMAKE_FLAGS := -DCMAKE_CXX_STANDARD=17
+	EXTRA_CMAKE_FLAGS += -DCMAKE_CXX_STANDARD=17
 endif
 CXXFLAGS += -Wno-register -DFMT_HEADER_ONLY
 COMMONFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\" -DSVN_VERSION=\"$(SVN_VERSION)\"
@@ -136,7 +138,101 @@ ifeq ($(ARM_HARDFLOAT), 1)
 endif
 
 # flags
-ifeq ($(platform), osx)
+# Consoles. All of them are static: the frontend links the core into RetroArch
+# rather than loading it, so the target is an archive and there is no linking
+# step here. None has a dynarec backend in this core, and none of them wants
+# SDL - the fake one is enough, which also takes the audio-codec dependencies
+# out of the build and leaves munt as the only one left to cross build.
+ifeq ($(platform),ctr)
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	CC  := $(DEVKITARM)/bin/arm-none-eabi-gcc
+	CXX := $(DEVKITARM)/bin/arm-none-eabi-g++
+	AR  := $(DEVKITARM)/bin/arm-none-eabi-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(DEVKITPRO)/cmake/3DS.cmake
+	COMMONFLAGS += -D_3DS -DARM11 -march=armv6k -mtune=mpcore -mfloat-abi=hard -mword-relocations
+	COMMONFLAGS += -I$(DEVKITPRO)/libctru/include -I$(DEVKITPRO)/portlibs/3ds/include
+else ifeq ($(platform),libnx)
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	CC  := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-gcc
+	CXX := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-g++
+	AR  := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(DEVKITPRO)/cmake/Switch.cmake
+	COMMONFLAGS += -DSWITCH -D__SWITCH__ -DHAVE_LIBNX -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -ftls-model=local-exec -fPIE
+	COMMONFLAGS += -I$(DEVKITPRO)/libnx/include -I$(DEVKITPRO)/portlibs/switch/include
+else ifneq (,$(filter $(platform),ngc wii wiiu))
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	# BASSMIDI loads its library at run time through dlopen, which a statically
+	# linked console build has no way to do - there is no dlfcn.h to include.
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	CC  := $(DEVKITPPC)/bin/powerpc-eabi-gcc
+	CXX := $(DEVKITPPC)/bin/powerpc-eabi-g++
+	AR  := $(DEVKITPPC)/bin/powerpc-eabi-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	COMMONFLAGS += -DGEKKO -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1
+	COMMONFLAGS += -I$(DEVKITPRO)/libogc/include -mcpu=750 -meabi -mhard-float
+	ifeq ($(platform),ngc)
+		COMMONFLAGS += -DHW_DOL -mogc
+		EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(DEVKITPRO)/cmake/GameCube.cmake
+	else ifeq ($(platform),wii)
+		COMMONFLAGS += -DHW_RVL -mrvl
+		EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(DEVKITPRO)/cmake/Wii.cmake
+	else
+		COMMONFLAGS += -DWIIU -D__wiiu__ -mcpu=750 -mregnames
+		EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(DEVKITPRO)/cmake/WiiU.cmake
+	endif
+else ifeq ($(platform),psp1)
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	# The PSP has no 3D pipeline this core could drive and only 32MB of RAM, so
+	# Voodoo emulation is off rather than merely unused.
+	WITH_VOODOO := 0
+	CC  := $(PSPDEV)/bin/psp-gcc
+	CXX := $(PSPDEV)/bin/psp-g++
+	AR  := $(PSPDEV)/bin/psp-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	COMMONFLAGS += -DPSP -D__PSP__ -G0 -march=allegrex -mno-abicalls -fno-pic
+	COMMONFLAGS += -I$(PSPDEV)/psp/include -I$(PSPDEV)/psp/sdk/include
+	# Without this munt is configured with the host compiler and the resulting
+	# libmt32emu.a is x86, which only shows up at link time in the frontend.
+	EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(PSPDEV)/psp/share/pspdev.cmake
+	# allegrex has no PIC, and the deps default to asking for it.
+	EXTRA_CMAKE_FLAGS += -DCMAKE_POSITION_INDEPENDENT_CODE=OFF
+else ifeq ($(platform),vita)
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	CC  := $(VITASDK)/bin/arm-vita-eabi-gcc
+	CXX := $(VITASDK)/bin/arm-vita-eabi-g++
+	AR  := $(VITASDK)/bin/arm-vita-eabi-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	COMMONFLAGS += -DVITA -D__vita__ -mtune=cortex-a9 -mfpu=neon -mfloat-abi=hard
+	COMMONFLAGS += -I$(VITASDK)/arm-vita-eabi/include
+	# Same reason as the PSP branch: munt has to be built for the target.
+	EXTRA_CMAKE_FLAGS += -DCMAKE_TOOLCHAIN_FILE=$(VITASDK)/share/vita.toolchain.cmake
+else ifeq ($(platform), osx)
 	COMMONFLAGS += -DC_HAVE_MPROTECT
 	TARGET := $(TARGET_NAME)_libretro.dylib
 	LDFLAGS += -dynamiclib `$(PKGCONFIG) $(PKG_CONFIG_FLAGS) --libs SDL_net`

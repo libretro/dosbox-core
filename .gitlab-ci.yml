@@ -45,6 +45,19 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/osx-arm64.yml'
 
+  ################################## CELLULAR ################################
+  # iOS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios-arm64.yml'
+
+  # iOS (armv7)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios9.yml'
+
+  # tvOS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/tvos-arm64.yml'
+
   #################################### MISC ##################################
   # webOS 32-bit (LGTV)
   - project: 'libretro-infrastructure/ci-templates'
@@ -386,6 +399,47 @@ libretro-build-webos-armv7a:
     - LDFLAGS="-Wl,--no-undefined" make -C ${MAKEFILE_PATH} -f ${MAKEFILE} CMAKE=/usr/bin/cmake PKGCONFIG=/usr/bin/pkg-config -j${NUMPROC}
 
 ################################### CELLULAR #################################
+# iOS / tvOS
+# The default template scripts only run make, and this core has to build its
+# dependency tree first, so these carry their own. No dynarec: both platforms
+# refuse an executable writable mapping, so the Makefile leaves WITH_DYNAREC
+# empty for them and the core runs interpreted, as dosbox-pure does.
+.dosbox-core-apple-mobile:
+  variables:
+    STATIC_LIBCXX: 1
+    WITH_BASSMIDI: 1
+    WITH_FLUIDSYNTH: 1
+    WITH_VOODOO: 1
+    BUNDLED_AUDIO_CODECS: 1
+    BUNDLED_LIBSNDFILE: 1
+    BUNDLED_SDL: 1
+    PKG_CONFIG_FLAGS: --static
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} clean
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - export LDFLAGS="-L \"$PWD/libretro/deps_bin/lib\""
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+libretro-build-ios-arm64:
+  extends:
+    - .libretro-ios-arm64-make-default
+    - .core-defs
+    - .dosbox-core-apple-mobile
+
+# iOS (armv7) [iOS 9 and up]
+libretro-build-ios9:
+  extends:
+    - .libretro-ios9-make-default
+    - .core-defs
+    - .dosbox-core-apple-mobile
+
+# tvOS
+libretro-build-tvos-arm64:
+  extends:
+    - .libretro-tvos-arm64-make-default
+    - .core-defs
+    - .dosbox-core-apple-mobile
+
 # Android ARMv7a
 android-armeabi-v7a:
   extends:

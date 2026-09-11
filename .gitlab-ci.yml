@@ -75,6 +75,10 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/libnx-static.yml'
 
+  # Nintendo 3DS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ctr-static.yml'
+
   #################################### MISC ##################################
   # webOS 32-bit (LGTV)
   - project: 'libretro-infrastructure/ci-templates'
@@ -397,6 +401,18 @@ libretro-build-libnx-aarch64:
   variables:
     platform: libnx
     EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake
+  script:
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
+    - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}
+
+# Nintendo 3DS
+libretro-build-ctr:
+  extends:
+    - .libretro-ctr-static-retroarch-master
+    - .core-defs
+  variables:
+    platform: ctr
+    EXTRA_CMAKE_FLAGS: -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/3DS.cmake
   script:
     - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} deps platform=${platform}
     - make -C ${MAKEFILE_PATH} -f ${MAKEFILE} -j${NUMPROC} platform=${platform}

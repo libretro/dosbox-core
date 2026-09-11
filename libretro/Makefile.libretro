@@ -114,12 +114,26 @@ else ifeq ($(platform),osx)
 	endif
 endif
 
+# iOS and tvOS forbid a process from mapping memory both writable and
+# executable, so there is no dynarec to have there: the core runs interpreted,
+# the way dosbox-pure does on the same platforms. Left empty on purpose rather
+# than guessed from the architecture.
+ifneq (,$(findstring ios,$(platform)))
+	WITH_DYNAREC :=
+else ifneq (,$(findstring tvos,$(platform)))
+	WITH_DYNAREC :=
+endif
+
 # enable IPX
 ifeq ($(platform),win)
 	WITH_IPX := 1
 else ifeq ($(platform),unix)
 	WITH_IPX := 1
 else ifeq ($(platform),osx)
+	WITH_IPX := 1
+else ifneq (,$(findstring ios,$(platform)))
+	WITH_IPX := 1
+else ifneq (,$(findstring tvos,$(platform)))
 	WITH_IPX := 1
 endif
 
@@ -136,7 +150,35 @@ ifeq ($(ARM_HARDFLOAT), 1)
 endif
 
 # flags
-ifeq ($(platform), osx)
+# iOS and tvOS. Darwin like macOS below, so most of that branch applies, but the
+# SDK and the architecture come from xcodebuild rather than from the host, and
+# C_HAVE_MPROTECT is deliberately absent: without a dynarec nothing needs an
+# executable mapping, and asking for one is what these platforms refuse.
+ifneq (,$(filter ios ios9 ios-arm64 tvos-arm64,$(platform)))
+	ifneq (,$(findstring tvos,$(platform)))
+		IOSSDK ?= $(shell xcodebuild -version -sdk appletvos Path)
+		MINVERSION := -mappletvos-version-min=11.0
+	else
+		IOSSDK ?= $(shell xcodebuild -version -sdk iphoneos Path)
+		ifeq ($(platform),ios9)
+			MINVERSION := -miphoneos-version-min=8.0
+		else
+			MINVERSION := -miphoneos-version-min=11.0
+		endif
+	endif
+	ifeq ($(platform),ios9)
+		IOSARCH := armv7
+	else
+		IOSARCH := arm64
+	endif
+	CC  = cc -arch $(IOSARCH) -isysroot $(IOSSDK)
+	CXX = c++ -arch $(IOSARCH) -isysroot $(IOSSDK)
+	TARGET := $(TARGET_NAME)_libretro_$(if $(findstring tvos,$(platform)),tvos,ios).dylib
+	LDFLAGS += -dynamiclib `$(PKGCONFIG) $(PKG_CONFIG_FLAGS) --libs SDL_net`
+	COMMONFLAGS += -D__MACOSX__ $(MINVERSION) -Wno-unknown-warning-option -Wno-deprecated-declarations
+	LDFLAGS += $(MINVERSION)
+	fpic = -fPIC
+else ifeq ($(platform), osx)
 	COMMONFLAGS += -DC_HAVE_MPROTECT
 	TARGET := $(TARGET_NAME)_libretro.dylib
 	LDFLAGS += -dynamiclib `$(PKGCONFIG) $(PKG_CONFIG_FLAGS) --libs SDL_net`

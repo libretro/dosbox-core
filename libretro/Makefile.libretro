@@ -114,26 +114,12 @@ else ifeq ($(platform),osx)
 	endif
 endif
 
-# iOS and tvOS forbid a process from mapping memory both writable and
-# executable, so there is no dynarec to have there: the core runs interpreted,
-# the way dosbox-pure does on the same platforms. Left empty on purpose rather
-# than guessed from the architecture.
-ifneq (,$(findstring ios,$(platform)))
-	WITH_DYNAREC :=
-else ifneq (,$(findstring tvos,$(platform)))
-	WITH_DYNAREC :=
-endif
-
 # enable IPX
 ifeq ($(platform),win)
 	WITH_IPX := 1
 else ifeq ($(platform),unix)
 	WITH_IPX := 1
 else ifeq ($(platform),osx)
-	WITH_IPX := 1
-else ifneq (,$(findstring ios,$(platform)))
-	WITH_IPX := 1
-else ifneq (,$(findstring tvos,$(platform)))
 	WITH_IPX := 1
 endif
 
@@ -150,34 +136,33 @@ ifeq ($(ARM_HARDFLOAT), 1)
 endif
 
 # flags
-# iOS and tvOS. Darwin like macOS below, so most of that branch applies, but the
-# SDK and the architecture come from xcodebuild rather than from the host, and
-# C_HAVE_MPROTECT is deliberately absent: without a dynarec nothing needs an
-# executable mapping, and asking for one is what these platforms refuse.
-ifneq (,$(filter ios ios9 ios-arm64 tvos-arm64,$(platform)))
-	ifneq (,$(findstring tvos,$(platform)))
-		IOSSDK ?= $(shell xcodebuild -version -sdk appletvos Path)
-		MINVERSION := -mappletvos-version-min=11.0
+# Consoles. All of them are static: the frontend links the core into RetroArch
+# rather than loading it, so the target is an archive and there is no linking
+# step here. None has a dynarec backend in this core, and none of them wants
+# SDL - the fake one is enough, which also takes the audio-codec dependencies
+# out of the build and leaves munt as the only one left to cross build.
+ifneq (,$(filter $(platform),ngc wii wiiu))
+	WITH_FAKE_SDL := 1
+	STATIC_LINKING := 1
+	WITH_DYNAREC :=
+	# BASSMIDI loads its library at run time through dlopen, which a statically
+	# linked console build has no way to do - there is no dlfcn.h to include.
+	WITH_BASSMIDI := 0
+	WITH_FLUIDSYNTH := 0
+	BUNDLED_SDL := 0
+	CC  := $(DEVKITPPC)/bin/powerpc-eabi-gcc
+	CXX := $(DEVKITPPC)/bin/powerpc-eabi-g++
+	AR  := $(DEVKITPPC)/bin/powerpc-eabi-ar
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	COMMONFLAGS += -DGEKKO -D__POWERPC__ -D__ppc__ -DMSB_FIRST -DWORDS_BIGENDIAN=1
+	COMMONFLAGS += -I$(DEVKITPRO)/libogc/include -mcpu=750 -meabi -mhard-float
+	ifeq ($(platform),ngc)
+		COMMONFLAGS += -DHW_DOL -mogc
+	else ifeq ($(platform),wii)
+		COMMONFLAGS += -DHW_RVL -mrvl
 	else
-		IOSSDK ?= $(shell xcodebuild -version -sdk iphoneos Path)
-		ifeq ($(platform),ios9)
-			MINVERSION := -miphoneos-version-min=8.0
-		else
-			MINVERSION := -miphoneos-version-min=11.0
-		endif
+		COMMONFLAGS += -DWIIU -D__wiiu__ -mcpu=750 -mregnames
 	endif
-	ifeq ($(platform),ios9)
-		IOSARCH := armv7
-	else
-		IOSARCH := arm64
-	endif
-	CC  = cc -arch $(IOSARCH) -isysroot $(IOSSDK)
-	CXX = c++ -arch $(IOSARCH) -isysroot $(IOSSDK)
-	TARGET := $(TARGET_NAME)_libretro_$(if $(findstring tvos,$(platform)),tvos,ios).dylib
-	LDFLAGS += -dynamiclib `$(PKGCONFIG) $(PKG_CONFIG_FLAGS) --libs SDL_net`
-	COMMONFLAGS += -D__MACOSX__ $(MINVERSION) -Wno-unknown-warning-option -Wno-deprecated-declarations
-	LDFLAGS += $(MINVERSION)
-	fpic = -fPIC
 else ifeq ($(platform), osx)
 	COMMONFLAGS += -DC_HAVE_MPROTECT
 	TARGET := $(TARGET_NAME)_libretro.dylib
